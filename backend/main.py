@@ -1,9 +1,10 @@
 import os
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Any, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from openai import OpenAI
+from .itinerary_schema import get_itinerary_schema_prompt, parse_and_validate_itinerary
 
 load_dotenv()
 
@@ -92,7 +93,7 @@ class TripContext(BaseModel):
     additional_notes: Optional[str] = None  # A39 / B30
 
 class TripResponse(BaseModel):
-    itinerary: str
+    itinerary: Dict[str, Any]
 
 # ---------- Prompt ----------
 
@@ -406,7 +407,7 @@ def generate_itinerary(ctx: TripContext):
     # =========================
     # Prompt + model call
     # =========================
-    prompt = build_prompt(ctx)
+    prompt = build_prompt(ctx) + "\n\n" + get_itinerary_schema_prompt()
 
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -418,6 +419,8 @@ def generate_itinerary(ctx: TripContext):
         max_tokens=1200,
     )
 
-    return TripResponse(
-        itinerary=completion.choices[0].message.content
-    )
+    raw_output = completion.choices[0].message.content
+
+    validated_itinerary = parse_and_validate_itinerary(raw_output)
+
+    return TripResponse(itinerary=validated_itinerary)
