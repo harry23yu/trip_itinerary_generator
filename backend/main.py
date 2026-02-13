@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from openai import OpenAI
 from .itinerary_schema import get_itinerary_schema_prompt, parse_and_validate_itinerary
+from .pdf_generator import generate_itinerary_pdf
+from datetime import datetime
 
 load_dotenv()
 
@@ -795,5 +797,18 @@ def generate_itinerary(ctx: TripContext):
     raw_output = completion.choices[0].message.content
 
     validated_itinerary = parse_and_validate_itinerary(raw_output)
+
+    # -----------------------------------------------------
+    # PDF generation layer
+    # -----------------------------------------------------
+    os.makedirs("generated_pdfs", exist_ok=True)
+
+    timestamp = datetime.now().strftime("%m_%d_%Y_%H%M%S")
+    pdf_path = f"generated_pdfs/itinerary_{timestamp}.pdf"
+
+    generate_itinerary_pdf(
+        validated_itinerary,
+        pdf_path
+    )
 
     return TripResponse(itinerary=validated_itinerary)

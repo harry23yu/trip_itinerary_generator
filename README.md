@@ -8,15 +8,13 @@ Unlike generic AI travel planners, this project is designed to reduce hallucinat
 
 ## Project Status
 
-**In active development.**
+**In active development. Backend is done, frontend in progress.**
 
-- Backend logic is partially implemented and functional
-- Both trip modes (discover + known destination) work end-to-end
-- Generated itineraries are realistic, paced, and preference-aware
-- Frontend has not been implemented yet
-- Output structure and validation are still evolving
-
-The current focus is **backend correctness, question design, and itinerary quality**, not UI polish.
+- Backend pipeline is functional end-to-end
+- Both trip modes (discover + known destination) work
+- Structured itinerary JSON validation implemented
+- PDF itinerary export implemented
+- Prompt and itinerary refinement ongoing
 
 ---
 
@@ -77,11 +75,18 @@ The system:
 
 ```text
 AI_TRIP_ITINERARY_GENERATOR/
-├── backend/        # Backend logic (in progress)
-├── frontend/       # Frontend (not implemented yet)
-├── .env            # Environment variables (ignored)
+├── backend/
+  ├── itinerary_schema.py
+  ├── main.py
+  ├── pdf_generator.py
+├── frontend/
+├── generated_pdfs/             # Ignored
+├── venv/                       # Ignored
+├── .env                        # Ignored
 ├── .gitignore
-└── README.md
+├── question_design.txt
+├── README.md
+├── requirements.txt
 ```
 
 ---
@@ -93,87 +98,92 @@ AI_TRIP_ITINERARY_GENERATOR/
 - Preference-aware itinerary generation
 - Support for:
   - Time constraints
-  - Rest days
   - Activity level
   - Accessibility considerations
   - Early/late schedule preferences
 - Outputs realistic, named locations and coherent daily flow
+- Automatic PDF itinerary generation with timestamped filenames
 
 ---
 
-## Sample JSON Request (Option B, Known Destination)
+## Sample JSON Request (Option A, Discover a Destination)
 
 ```text
 {
-  "trip_mode": "known",
+  "trip_mode": "discover",
 
-  "destination": "Oregon Coast (Cannon Beach, Newport, Florence)",
+  "has_discovery_intent": true,
+  "discovery_intent": "I want a destination with a lot of museums and amusement parks.",
+
+  "knows_trip_length": true,
   "days": 5,
+
   "people": 2,
 
-  "origin_location": "Portland, Oregon",
-  "transport_mode": "driving",
+  "transport_mode": "Driving",
+  "origin_location": "Phoenix, AZ",
 
   "international_travel": false,
   "preferred_countries": null,
-  "distance_preference": null,
+  "distance_preference": "200-500 miles",
 
   "has_dates": true,
-  "date_range": "July 10 to July 15",
+  "date_range": "July 10 to July 14",
 
-  "area_structure": "multiple_areas",
+  "has_time_constraints": true,
+  "time_constraints_detail": "July 12 from 2:00 PM to 5:00 PM",
 
-  "has_time_constraints": false,
-  "time_constraints_detail": null,
+  "area_structure": "Yes",
+
+  "special_group_needs": ["None"],
+  "accessibility_needs": false,
+  "accessibility_details": null,
+
+  "destination": null,
+  "knows_trip_length_b": null,
+  "days_b": null,
+  "people_b": null,
 
   "budget_concern": true,
-  "budget_amount": 1800,
+  "budget_amount": 2500,
 
-  "weather_avoidance": ["heavy rain", "strong winds"],
+  "weather_avoidance": ["Extreme heat", "High humidity"],
 
-  "food_interest_level": 6,
-  "cuisine_preferences": ["seafood", "local cuisine"],
+  "interests": "Museums, family fun centers, and amusement parks.",
 
-  "shopping_interest_level": 2,
-  "shopping_preferences": null,
+  "food_interest_level": 8,
+  "cuisine_preferences": ["Italian", "Other"],
+  "cuisine_preferences_other_text": "Peruvian",
 
-  "trip_purpose": "Relaxing coastal road trip with scenic views, nature, and small towns",
-  "schedule_style": "relaxed",
+  "shopping_interest_level": 5,
+  "shopping_preferences": ["Local specialty foods", "Other"],
+  "shopping_preferences_other_text": "Independent bookstores",
 
-  "must_do": [
-    "Visit Cannon Beach and Haystack Rock",
-    "See tide pools",
-    "Drive scenic coastal highways",
-    "Watch sunsets over the ocean"
-  ],
+  "trip_purpose": "Relaxing anniversary getaway",
+  "schedule_style": "Packed",
 
-  "must_avoid": [
-    "Crowded nightlife",
-    "Overly packed daily schedules"
-  ],
+  "must_do": ["Watch a sunset over the ocean", "Visit a lighthouse"],
+  "must_avoid": ["None"],
 
-  "physical_activity_level": 4,
-  "public_transit_comfort": 1,
+  "physical_activity_level": 6,
+  "public_transit_comfort": 3,
 
   "nightlife": false,
+  "photography_importance": 9,
 
-  "photography_importance": 7,
+  "desired_feelings": ["Inspired", "Connected"],
 
-  "desired_feelings": ["relaxed", "refreshed", "grounded"],
+  "travel_vs_depth": "More time traveling",
 
-  "rest_days": 1,
+  "excluded_places": ["Charlotte"],
 
-  "travel_vs_depth": "balanced",
+  "start_time_preference": "Other",
+  "start_time_other_text": "8:30 AM",
 
-  "excluded_places": ["Seaside"],
+  "end_time_preference": "9 PM",
+  "end_time_other_text": null,
 
-  "start_time_preference": "midday",
-  "end_time_preference": "early",
-
-  "special_group_needs": [],
-  "accessibility_needs": false,
-
-  "additional_notes": "Prefer shorter drives between stops and time to explore each town without rushing."
+  "additional_notes": "Prefer boutique hotels over large resorts."
 }
 ```
 
@@ -189,16 +199,17 @@ AI_TRIP_ITINERARY_GENERATOR/
         "day": 1,
         "sections": {
           "morning": [
-            "Arrive in Cannon Beach",
-            "Check into your accommodation"
+            "Depart from Phoenix, AZ at 8:30 AM.",
+            "Drive to San Diego, CA (approx. 5 hours).",
+            "Check into a boutique hotel in the Gaslamp Quarter."
           ],
           "afternoon": [
-            "Visit Cannon Beach and Haystack Rock",
-            "Explore local shops and galleries"
+            "Visit the San Diego Museum of Art.",
+            "Explore Balboa Park, taking photos of the gardens."
           ],
           "evening": [
-            "Have dinner at a seafood restaurant",
-            "Watch the sunset over the ocean"
+            "Dinner at an Italian restaurant in Little Italy.",
+            "Watch the sunset at Sunset Cliffs."
           ]
         }
       },
@@ -206,16 +217,16 @@ AI_TRIP_ITINERARY_GENERATOR/
         "day": 2,
         "sections": {
           "morning": [
-            "Drive to Ecola State Park for scenic views",
-            "Hike along the trails to see the coastline"
+            "Visit the USS Midway Museum.",
+            "Grab brunch at a local café."
           ],
           "afternoon": [
-            "Enjoy a picnic lunch at the park",
-            "Drive to Newport along the scenic highway"
+            "Spend the afternoon at SeaWorld San Diego.",
+            "Enjoy various shows and attractions."
           ],
           "evening": [
-            "Check into your Newport accommodation",
-            "Dine at a local seafood restaurant"
+            "Dinner at a Peruvian restaurant in Hillcrest.",
+            "Stroll along the Embarcadero."
           ]
         }
       },
@@ -223,16 +234,16 @@ AI_TRIP_ITINERARY_GENERATOR/
         "day": 3,
         "sections": {
           "morning": [
-            "Visit the Oregon Coast Aquarium",
-            "Explore the nearby Yaquina Head Outstanding Natural Area"
+            "Drive to Los Angeles (about 2 hours).",
+            "Visit the Getty Center."
           ],
           "afternoon": [
-            "Have lunch at a local cafe",
-            "See tide pools at low tide"
+            "Explore the Los Angeles County Museum of Art (LACMA).",
+            "Take photos at the Urban Light installation."
           ],
           "evening": [
-            "Enjoy dinner at a waterfront restaurant",
-            "Watch the sunset from the beach"
+            "Dinner at a local Italian eatery.",
+            "Relax at a scenic viewpoint overlooking the city."
           ]
         }
       },
@@ -240,16 +251,16 @@ AI_TRIP_ITINERARY_GENERATOR/
         "day": 4,
         "sections": {
           "morning": [
-            "Drive to Florence",
-            "Visit the Sea Lion Caves"
+            "Spend the morning at Disneyland Park.",
+            "Enjoy iconic rides and attractions."
           ],
           "afternoon": [
-            "Walk along the beach and enjoy the scenery",
-            "Have lunch at a local diner"
+            "Lunch at the park.",
+            "Continue exploring Disneyland."
           ],
           "evening": [
-            "Check into your accommodation in Florence",
-            "Relax and enjoy a quiet evening"
+            "Dinner at a restaurant in Downtown Disney.",
+            "Return to hotel for rest."
           ]
         }
       },
@@ -257,20 +268,21 @@ AI_TRIP_ITINERARY_GENERATOR/
         "day": 5,
         "sections": {
           "morning": [
-            "Spend a leisurely morning at the beach",
-            "Take photographs of the coastal views"
+            "Check out of the hotel.",
+            "Visit the Ocean Institute in Dana Point."
           ],
           "afternoon": [
-            "Begin your drive back, stopping at scenic overlooks",
-            "Have lunch along the way"
+            "Drive back to Phoenix, AZ.",
+            "Stop for lunch along the way."
           ],
           "evening": [
-            "Arrive back home"
+            "Arrive back in Phoenix around 7 PM.",
+            "Celebrate the anniversary with a cozy dinner at home."
           ]
         }
       }
     ],
-    "summary": "This 5-day itinerary offers a relaxed coastal road trip along the Oregon Coast, focusing on scenic views, nature, and local cuisine while allowing time for exploration and photography."
+    "summary": "A packed 5-day itinerary exploring museums and amusement parks, featuring scenic views, delicious dining, and a romantic sunset, all while celebrating an anniversary."
   }
 }
 ```
@@ -279,14 +291,62 @@ AI_TRIP_ITINERARY_GENERATOR/
 
 ## Planned Improvements
 
-- Finalize backend constraint normalization
-- Improve output structure consistency
-- Add **PDF itinerary export (backend)**
-- Build minimal frontend (question flow + itinerary view)
-- Add export and sharing options
+- Improve itinerary accuracy and constraint handling
+- Build frontend (question flow + itinerary view)
+- Add PDF download from frontend
+- Add sharing/export options
 
 ---
 
-## Important Note
+##  Running the Backend Locally
 
-Frontend work will begin after backend behavior stabilizes.
+Do these commands in the terminal of your text editor:
+
+```text
+git clone https://github.com/yourusername/ai_trip_itinerary_generator.git
+cd ai_trip_itinerary_generator
+
+python -m venv venv
+source venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+Create a .env file with:
+
+```text
+OPENAI_API_KEY=your_api_key_here
+```
+
+**Important:** You need to have a working OpenAI API key to run the backend. To get an OpenAI API key, follow these four steps:
+
+1. Log in or create an [OpenAI](https://auth.openai.com/log-in) account.
+2. In order to have a working OpenAI API key, you need OpenAI credits. Go to the [billing page](https://platform.openai.com/settings/organization/billing/overview) to pay for credits. Calling OpenAI's API for the backend is very cheap; you can make several calls with just 1 cent! If you don't have any credits, I recommend you add $5, the minimum required amount on OpenAI.
+3. Once you have the money, you can start making API calls. Add an API key on [this page](https://platform.openai.com/api-keys). Make sure to keep your key secret!
+4. Copy and paste your secret key in the .env file (see above).
+
+Start the server by using this command:
+
+```text
+uvicorn backend.main:app --reload
+```
+
+The app will be available at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Once you are at the URL above, follow these steps:
+
+1. Click POST /generate-itinerary
+2. Click Try it out
+3. Paste a JSON request body (see example in this README)
+4. Click Execute
+5. Wait for the itinerary to appear!
+
+Generated PDFs with the itinerary will appear in:
+
+```text
+generated_pdfs/
+```

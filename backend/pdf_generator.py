@@ -147,7 +147,7 @@ def generate_itinerary_pdf(itinerary: dict, output_path: str) -> None:
     doc.build(story)
     print(f"PDF successfully generated at: {output_path}")
 
-
+# Local test runner for PDF generation; not used by FastAPI
 if __name__ == "__main__":
     # Example usage
     sample_itinerary = {

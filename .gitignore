@@ -7,5 +7,5 @@ __pycache__/
 .env
 
 # Files
-questions.txt
+generated_pdfs/
 *.pdf
