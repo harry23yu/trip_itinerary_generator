@@ -7,10 +7,19 @@ from openai import OpenAI
 from .itinerary_schema import get_itinerary_schema_prompt, parse_and_validate_itinerary
 from .pdf_generator import generate_itinerary_pdf
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
 app = FastAPI(title="AI Trip Itinerary Generator")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
