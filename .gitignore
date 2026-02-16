@@ -9,3 +9,4 @@ __pycache__/
 # Files
 generated_pdfs/
 *.pdf
+.DS_Store
