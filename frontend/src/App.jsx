@@ -1,139 +1,80 @@
 import { useState } from "react";
+import QuestionRenderer from "./questions/QuestionRenderer";
+import { optionARequired, optionBRequired } from "./questions/required_questions";
+import { optionAOptional, optionBOptional } from "./questions/optional_questions";
 
 function App() {
-  const [step, setStep] = useState("mode");
-  const [mode, setMode] = useState(null);
+  const [selectedOption, setSelectedOption] = useState(null);
   const [formData, setFormData] = useState({});
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
+  const handleOptionSelect = (option) => {
+    setSelectedOption(option);
+    setFormData({}); // reset form when switching
+  };
+
+  const handleChange = (id, value) => {
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [id]: value,
     }));
   };
 
+  const getQuestions = () => {
+    if (!selectedOption) return [];
+
+    if (selectedOption === "A") {
+      return [...optionARequired, ...optionAOptional];
+    }
+
+    if (selectedOption === "B") {
+      return [...optionBRequired, ...optionBOptional];
+    }
+
+    return [];
+  };
+
+  const questions = getQuestions();
+
   return (
-    <div style={{ padding: "40px", fontFamily: "sans-serif" }}>
+    <div style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
       <h1>AI Trip Itinerary Generator</h1>
 
-      {/* ===================== */}
-      {/* STEP 1 — MODE SELECT  */}
-      {/* ===================== */}
-      {step === "mode" && (
-        <div style={{ marginTop: "30px" }}>
-          <h2>How would you like to plan your trip?</h2>
-
-          <div style={{ marginTop: "20px" }}>
-            <button
-              style={{ marginRight: "20px", padding: "10px 20px" }}
-              onClick={() => {
-                setMode("A");
-                setStep("required");
-              }}
-            >
-              Option A — I don't know where I want to go
-            </button>
-
-            <button
-              style={{ padding: "10px 20px" }}
-              onClick={() => {
-                setMode("B");
-                setStep("required");
-              }}
-            >
-              Option B — I already know my destination
-            </button>
-          </div>
+      {!selectedOption && (
+        <div>
+          <h2>Select an Option</h2>
+          <button onClick={() => handleOptionSelect("A")}>
+            Option A – I don't know where to go
+          </button>
+          <br />
+          <br />
+          <button onClick={() => handleOptionSelect("B")}>
+            Option B – I already know where I'm going
+          </button>
         </div>
       )}
 
-      {/* ===================== */}
-      {/* STEP 2 — REQUIRED     */}
-      {/* ===================== */}
-      {step === "required" && (
-        <div style={{ marginTop: "40px" }}>
-          <h2>Required Questions (Option {mode})</h2>
+      {selectedOption && (
+        <div>
+          <h2>
+            {selectedOption === "A"
+              ? "Option A – Discovery Mode"
+              : "Option B – Structured Mode"}
+          </h2>
 
-          {/* ===== OPTION A REQUIRED SAMPLE ===== */}
-          {mode === "A" && (
-            <>
-              <div style={{ marginTop: "20px" }}>
-                <p>How many people are planning to go?</p>
-                <select
-                  onChange={(e) =>
-                    handleChange("people", e.target.value)
-                  }
-                >
-                  <option value="">Select</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3-4">3-4</option>
-                  <option value="5-6">5-6</option>
-                </select>
-              </div>
+          {questions.map((question) => {
+            if (question.showIf && !question.showIf(formData)) {
+              return null;
+            }
 
-              <div style={{ marginTop: "20px" }}>
-                <p>Where are you currently?</p>
-                <input
-                  type="text"
-                  placeholder="City, Country"
-                  onChange={(e) =>
-                    handleChange("origin_location", e.target.value)
-                  }
-                />
-              </div>
-            </>
-          )}
-
-          {/* ===== OPTION B REQUIRED SAMPLE ===== */}
-          {mode === "B" && (
-            <>
-              <div style={{ marginTop: "20px" }}>
-                <p>Where is your trip?</p>
-                <input
-                  type="text"
-                  placeholder="City or area"
-                  onChange={(e) =>
-                    handleChange("destination", e.target.value)
-                  }
-                />
-              </div>
-
-              <div style={{ marginTop: "20px" }}>
-                <p>How many people are going?</p>
-                <select
-                  onChange={(e) =>
-                    handleChange("people_b", e.target.value)
-                  }
-                >
-                  <option value="">Select</option>
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3-4">3-4</option>
-                  <option value="5-6">5-6</option>
-                </select>
-              </div>
-            </>
-          )}
-
-          <div style={{ marginTop: "40px" }}>
-            <button
-              onClick={() => {
-                console.log("Form Data:", formData);
-                setStep("optional");
-              }}
-              style={{ padding: "10px 20px" }}
-            >
-              Continue to Optional Questions
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* TEMP OPTIONAL SCREEN */}
-      {step === "optional" && (
-        <div style={{ marginTop: "40px" }}>
-          <h2>Optional Questions Coming Next</h2>
+            return (
+              <QuestionRenderer
+                key={question.id}
+                question={question}
+                value={formData[question.id]}
+                handleChange={handleChange}
+              />
+            );
+          })}
         </div>
       )}
     </div>

@@ -19,7 +19,7 @@ Option A: The user doesn't know where they want to go
     12 (R, OE). (Only if answer is "yes" to previous question.) To make the AI understand the dates as clear as possible, enter the dates here in this format: [Month] [Day] to [Month] [Day].
 13 (R, MC). Are there any strict time constraints on specific days? [Yes, No]
     14 (R, OE). (Only if answer is "yes" to previous question.) To make the AI understand the dates and times as clear as possible, enter the day(s) and time(s) you have time constraints in this format: [Month] [Day] from [hh:mm] [AM/PM] to [hh:mm] [AM/PM]. To enter more than one date or time, use commas to separate them.
-15 (R, MC). Are you planning to visit one area (like one city) or multiple areas (an example would be a trip across the entire Oregon Coast)? [Yes, No]
+15 (R, MC). Are you planning to visit one area (like one city, even if it is very big) or multiple areas (an example would be a trip across the entire Oregon Coast, since it contains multiple cities)? [Yes, No]
 16 (R, CATA). Are you traveling with children, disabled people, and/or elderly people? Check all that apply. [Children, Disabled People, Elderly People, None]
 17 (R, MC). Do you (or anyone in your group) have any mobility limitations and/or accessibility needs? [Yes, No]
     18 (R, OE). (Only if answer is "yes" to previous question.) Explain the mobility limitations and/or accessibility needs here.
