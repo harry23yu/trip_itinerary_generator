@@ -9,17 +9,17 @@ Option A: The user doesn't know where they want to go
     2 (R, OE). (Only if answer is "yes" to previous question.) Describe the type(s) of places you want to go. The more specific, the better. For example, you could say "I want to go to a place (or places) where there are lots of hiking trails and beaches."
 3 (R, MC). Do you know how long you want your trip to be? [Yes, No]
     4 (R, NUM). (Only if answer is "yes" to previous question.) How long is your trip? Enter the number of days. [1-30]
-5 (R, MC). How many people are planning to go on your trip, including yourself? [1, 2, 3-4, 5-6, 7-9, 10-14, 15 or more]
+5 (R, MC). How many people are planning to go on your trip, including yourself? [1, 2, 3-4, 5-6, 7-9, 10-14, 15 or more, Not sure yet]
 6 (R, MC). How are you planning on getting to your destination? [Driving, Flying, Train, Bus, Cruise or ferry, Not sure yet]
 7 (R, OE). Where are you currently? If possible, include the city and country.
 8 (R, MC). Do you want to travel to a different country? Note: If you don't have a valid passport that allows international travel, answer "no" to this question. [Yes, No]
     9 (R, OE). (Only if answer is "yes" to previous question.) What country (or countries) do you prefer? Only list countries where your passport is valid for travel.
-    10 (R, MC). (Only if answer is "no" to Q8.) How far do you want your destination to be away from your current location? [<10 miles, 10-20 miles, 20-50 miles, 50-100 miles, 100-200 miles, 200-500 miles, >500 miles]
+    10 (R, MC). (Only if answer is "no" to Q8.) How far do you want your destination to be away from your current location? [<10 miles, 10-20 miles, 20-50 miles, 50-100 miles, 100-200 miles, 200-500 miles, >500 miles, Don't care]
 11 (R, MC). Do you know the dates that you want your trip to be? [Yes, No]
     12 (R, OE). (Only if answer is "yes" to previous question.) To make the AI understand the dates as clear as possible, enter the dates here in this format: [Month] [Day] to [Month] [Day].
 13 (R, MC). Are there any strict time constraints on specific days? [Yes, No]
     14 (R, OE). (Only if answer is "yes" to previous question.) To make the AI understand the dates and times as clear as possible, enter the day(s) and time(s) you have time constraints in this format: [Month] [Day] from [hh:mm] [AM/PM] to [hh:mm] [AM/PM]. To enter more than one date or time, use commas to separate them.
-15 (R, MC). Are you planning to visit one area (like one city, even if it is very big) or multiple areas (an example would be a trip across the entire Oregon Coast, since it contains multiple cities)? [Yes, No]
+15 (R, MC). Are you planning to visit one area (like one city, even if it is very big) or multiple areas (an example would be a trip across the entire Oregon Coast, since it contains multiple cities)? [One area, Multiple areas]
 16 (R, CATA). Are you traveling with children, disabled people, and/or elderly people? Check all that apply. [Children, Disabled People, Elderly People, None]
 17 (R, MC). Do you (or anyone in your group) have any mobility limitations and/or accessibility needs? [Yes, No]
     18 (R, OE). (Only if answer is "yes" to previous question.) Explain the mobility limitations and/or accessibility needs here.
@@ -51,7 +51,7 @@ Option B: The user already knows their trip
 1 (R, OE). Where is your trip? Enter the city or area you are staying. If possible, give the dates. If you are staying in multiple places, be as detailed as possible (for example, "New York City, 6/24-6/27, Boston, 6/28-6/30, Miami, 7/1-7/4").
 2 (R, MC). Do you know how long is your trip? [Yes, No]
     3 (R, NUM). (Only if answer is "yes" to previous question.) How long is your trip? Enter the number of days. [1-30]
-4 (R, NUM). How many people are planning to go on your trip, including yourself? [1, 2, 3-4, 5-6, 7-9, 10-14, 15 or more]
+4 (R, NUM). How many people are planning to go on your trip, including yourself? [1, 2, 3-4, 5-6, 7-9, 10-14, 15 or more, Not sure yet]
 5 (R, MC). Are there any strict time constraints on specific days? [Yes, No]
     6 (R, OE). (Only if answer is "yes" to previous question.) To make the AI understand the dates and times as clear as possible, enter the day(s) and time(s) you have time constraints in this format: [Month] [Day] from [hh:mm] [AM/PM] to [hh:mm] [AM/PM]. To enter more than one date or time, use commas to separate them.
 7 (R, CATA). Are you traveling with children, disabled people, and/or elderly people? [Children, Disabled People, Elderly People, None]
@@ -73,7 +73,7 @@ Option B: The user already knows their trip
 23 (O, NUM). How comfortable are you with using public transportation? Rate on a scale from 1-10 (1 = not at all, 10 = very much). [1-10]
 24 (O, MC). Do you want nightlife included? [Yes, No]
 25 (O, NUM). How important is photography or Instagram-style spots? Rate on a scale from 1-10 (1 = not at all, 10 = very much). [1-10]
-26 (O, CATA). What do you want to feel at the end of this trip?
+26 (O, OE). What do you want to feel at the end of this trip?
 27 (O, MC). Would you rather spend more time traveling or more time in fewer places? [More time traveling, more time in fewer places, Somewhere in between]
 28 (O, OE). Anywhere (cities, districts, important attractions) that you don't want to visit (or don't have time to visit)?
 29 (O, MC). When do you want to start exploring each day (or most days)? [7 AM, 8 AM, 9 AM, 10 AM, 11 AM, 12 PM, Other]

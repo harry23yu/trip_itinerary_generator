@@ -1,7 +1,8 @@
 import os
-from typing import Optional, List, Literal, Any, Dict
+from typing import Optional, List, Any, Dict
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
 from .itinerary_schema import get_itinerary_schema_prompt, parse_and_validate_itinerary
@@ -25,9 +26,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ---------- Models ----------
 
-from pydantic import BaseModel
-from typing import List, Optional
-
 class TripContext(BaseModel):
 
     # =========================
@@ -46,12 +44,14 @@ class TripContext(BaseModel):
     knows_trip_length: bool  # Q3
     days: Optional[int] = None  # Q4 (required if knows_trip_length=True)
 
-    people: int  # Q5
+    # NOTE: people is a string because the frontend sends values like "3-4",
+    # "15 or more", "Not sure yet". Do not type as int.
+    people: Optional[Any] = None  # Q5
     transport_mode: str  # Q6
     origin_location: str  # Q7
 
     international_travel: bool  # Q8
-    preferred_countries: Optional[List[str]] = None  # Q9
+    preferred_countries: Optional[str] = None  # Q9
     distance_preference: Optional[str] = None  # Q10
 
     has_dates: bool  # Q11
@@ -74,7 +74,8 @@ class TripContext(BaseModel):
 
     knows_trip_length_b: Optional[bool] = None  # B2
     days_b: Optional[int] = None  # B3
-    people_b: Optional[int] = None  # B4
+    # Same as people: string values like "3-4", "Not sure yet"
+    people_b: Optional[Any] = None  # B4
 
     # =====================================================
     # ================= OPTIONAL SHARED ===================
@@ -123,6 +124,7 @@ class TripContext(BaseModel):
 
 class TripResponse(BaseModel):
     itinerary: Dict[str, Any]
+    pdf_path: Optional[str] = None
 
 # ---------- Prompt ----------
 
@@ -197,6 +199,10 @@ Trip mode: Known destination (Option B)
 Destination details (including dates if provided): {ctx.destination}
 """
 
+    # Resolve people and days for both modes
+    people_display = ctx.people if ctx.trip_mode == "discover" else (ctx.people_b or ctx.people)
+    days_display = ctx.days if ctx.trip_mode == "discover" else (ctx.days_b or ctx.days)
+
     # ==========================================
     # Main Prompt Body
     # ==========================================
@@ -210,8 +216,8 @@ make conservative assumptions and avoid over-optimizing.
 
 {destination_block}
 
-Trip length (days): {ctx.days or "Not specified"}
-Number of people: {ctx.people}
+Trip length (days): {days_display or "Not specified"}
+Number of people: {people_display or "Not specified"}
 
 Has strict time constraints: {ctx.has_time_constraints}
 Time constraint details: {ctx.time_constraints_detail or "None"}
@@ -233,361 +239,76 @@ Cuisine preferences: {cuisine_display}
 Shopping interest level (1–10): {ctx.shopping_interest_level or "Not specified"}
 Shopping preferences: {shopping_display}
 
-Main purpose of trip: {ctx.trip_purpose or "Not specified"}
-Schedule style: {ctx.schedule_style or "Not specified"}
+Trip purpose: {ctx.trip_purpose or "Not specified"}
+Schedule style (packed/relaxed): {ctx.schedule_style or "Not specified"}
 
-Must-do activities: {ctx.must_do or "None"}
-Things to avoid: {ctx.must_avoid or "None"}
+Must-do activities: {ctx.must_do or "Not specified"}
+Must-avoid activities: {ctx.must_avoid or "Not specified"}
 
 Physical activity level (1–10): {ctx.physical_activity_level or "Not specified"}
+Public transit comfort (1–10): {ctx.public_transit_comfort or "Not specified"}
 
-Public transportation comfort (1–10): {ctx.public_transit_comfort or "Not specified"}
-
-Nightlife included: {ctx.nightlife}
-
+Nightlife desired: {ctx.nightlife}
 Photography importance (1–10): {ctx.photography_importance or "Not specified"}
 
 Desired feelings at end of trip: {ctx.desired_feelings or "Not specified"}
 
 Travel vs depth preference: {ctx.travel_vs_depth or "Not specified"}
-
-Excluded places or attractions: {ctx.excluded_places or "None"}
+Excluded places: {ctx.excluded_places or "None"}
 
 Preferred daily start time: {start_time_display or "Not specified"}
 Preferred daily end time: {end_time_display or "Not specified"}
 
-Additional notes from user: {ctx.additional_notes or "None"}
-
-Constraints and interpretation rules:
-
-0) Core Planning Philosophy
-- Treat user inputs as structured signals with varying strength.
-- Convert all inputs into operational planning constraints before generating the itinerary.
-- Do not improvise beyond user tolerance levels.
-- Do not optimize aggressively when information is incomplete.
-- When in doubt, choose the more conservative, feasible, and lower-risk option.
+Additional notes: {ctx.additional_notes or "None"}
 
 ------------------------------------------------------------
-1) Conflict Resolution Framework (Apply BEFORE planning)
-------------------------------------------------------------
+PLANNING RULES:
 
-1.1 Classification of input signals
+1. Trip Length Inference
+If days is "Not specified" but a date range is given, calculate the number of days from it. For example, 6/22-6/27 includes 6/22, 6/23, 6/24, 6/25, 6/26, and 6/27, which is equal to 6 days.
+If neither is available, default to 5 days.
 
-A) Hard constraints (never violate)
-- Safety concerns
-- Accessibility and mobility limitations
-- Strict time constraints
-- Explicit exclusions / must-avoid
-- Trip length (days)
-- Date range
-- Transportation feasibility
-- International feasibility (passport/distance restrictions)
+2. Group Size Adaptation
+- "1": solo traveler — prioritize safety, flexibility, social opportunities
+- "2": couple or pair — balance shared and individual interests
+- "3-4": small group — coordinate logistics, allow for some splitting
+- "5-6" or more: larger group — prioritize accessible, high-capacity venues
+- "Not sure yet": plan for 2 as a safe default
 
-B) Strong preferences
-- Numeric ratings 7–10
-- Explicit must-do items
-- Schedule style when explicitly chosen
+3. Budget Handling
+If budget_concern is True and budget_amount is given, keep recommendations within budget.
+If budget_concern is True but no amount, lean toward mid-range options.
+If budget_concern is False or null, do not restrict choices by cost.
 
-C) Moderate preferences
-- Numeric ratings 4–6
-- Travel vs depth preference
-- Public transit comfort
+4. Time Constraints
+If has_time_constraints is True, anchor those windows in the correct day blocks.
+Leave buffer before and after constraint windows.
 
-D) Weak preferences
-- Numeric ratings 1–3
-- Secondary optional interests
+5. Accessibility
+If accessibility_needs is True, avoid activities with significant physical barriers.
+Prioritize wheelchair-accessible, low-mobility-friendly, and transport-accessible options.
 
-1.2 Conflict resolution rules
+6. Weather Avoidance
+If weather_avoidance is provided, avoid recommending outdoor activities in those conditions.
+Suggest indoor alternatives where relevant.
 
-- Never silently violate a hard constraint.
-- If two hard constraints conflict, choose the safest and most conservative interpretation and explain in 1–3 bullets under:
-  "Assumptions & conflict resolutions".
-- When a hard constraint conflicts with a preference, satisfy the hard constraint.
-- When two preferences conflict:
-  - Satisfy the stronger signal (based on classification above).
-  - If equal strength, choose the option that improves feasibility and reduces risk.
-- Do not exaggerate fulfillment of low-priority signals.
+7. Schedule Pacing
+- "Packed": 4–6 activities per day across sections
+- "Relaxed": 2–3 activities per day, include rest/leisure
+- "Somewhere in between": 3–4 activities per day
 
-------------------------------------------------------------
-2) Automatic Feasibility & Consistency Checks
-------------------------------------------------------------
+8. Nightlife
+If nightlife is True, include at least one evening activity involving bars, music, or entertainment per day where appropriate.
+If False, keep evenings restaurant/leisure-focused only.
 
-2.1 International vs domestic logic
-- If international_travel = true:
-  - Select only destinations from preferred_countries.
-  - Do not assume visa feasibility beyond user indication.
-- If international_travel = false:
-  - Select only destinations within stated distance_preference.
-- If origin_location is provided:
-  - Ensure travel feasibility given transport_mode.
+9. Start/End Times
+Respect preferred daily start and end times. Do not schedule activities before start or after end.
 
-2.2 Transport mode vs geography
-- Driving:
-  - Avoid unrealistic long-distance drives unless multi-area road trip implied.
-- Flying:
-  - Allow larger distance but cluster activities geographically within each destination.
-- Train / bus:
-  - Prefer urban corridors with strong public transit.
-- Cruise/ferry:
-  - Anchor itinerary around port-based exploration.
+9.1 Dominant Theme Rule
+If the user provided interests, must_do items, or trip_purpose, those should be the dominant theme of at least 60% of activities across the itinerary. Do not dilute the itinerary with generic tourist activities if the user has clear preferences.
 
-2.3 Dates vs trip length
-- If both days and date_range exist and conflict:
-  - Treat date_range as authoritative.
-  - Adjust effective day count.
-  - Note adjustment briefly.
-- Do not compress unrealistic number of cities into short duration.
-
-2.4 Time constraints vs daily structure
-- Strict time constraints override all scheduling preferences.
-- Build the day around fixed events.
-- Adjust activity density accordingly.
-- Do not stack unrealistic activities near fixed windows.
-
-2.5 Nightlife vs timing
-- If nightlife = true:
-  - Include evening social experiences.
-- If early end_time_preference conflicts:
-  - Interpret nightlife as early-evening (dinner, wine bar, performance).
-- Never force late-night if timing constraints contradict.
-
-2.6 Physical activity vs accessibility
-- Accessibility always overrides activity intensity.
-- If physical_activity_level is high but accessibility_needs = true:
-  - Provide accessible alternatives with similar experience.
-- Do not include steep hikes, long walking loops, or high exertion unless physically feasible.
-
-2.7 Budget vs must-do
-- Must-do items take priority.
-- If budget_concern = true:
-  - Reduce cost in lodging, dining, or secondary activities.
-  - Avoid premium-only experiences unless essential.
-- Do not fabricate unrealistic “budget luxury.”
-
-2.8 Weather avoidance vs dates
-- Dates are authoritative.
-- Choose locations and indoor/outdoor mix to minimize exposure to avoided weather types.
-- Do not contradict explicit weather avoidance.
-
-2.9 Travel vs depth
-- “More time traveling”:
-  - Increase geographic diversity.
-  - Accept higher transit time.
-- “More time in fewer places”:
-  - Deepen neighborhood-level exploration.
-  - Reduce intercity transfers.
-- “Somewhere in between”:
-  - Moderate balance.
-
-------------------------------------------------------------
-3) Pacing & Density Algorithm
-------------------------------------------------------------
-
-3.1 Schedule style interpretation
-
-If schedule_style = Packed:
-- 3–4 substantial activities per day.
-- Short transitions.
-- Limited downtime.
-
-If schedule_style = Relaxed:
-- 1–2 anchor activities per day.
-- Built-in buffer periods.
-- Flexible afternoons.
-
-If “Somewhere in between”:
-- 2–3 structured activities per day.
-
-3.2 Physical activity scaling
-- 1–3: Mostly seated, scenic, or transit-based activities.
-- 4–6: Moderate walking, short exploration blocks.
-- 7–10: Active exploration, longer walks, outdoor components.
-
-3.3 Public transportation comfort
-- 1–3: Minimize transfers; prioritize compact geography.
-- 4–6: Moderate transit usage.
-- 7–10: Multi-stop public transit acceptable.
-
-3.4 Activity clustering
-- Minimize backtracking.
-- Group geographically adjacent attractions.
-- Avoid unrealistic commute assumptions.
-
-------------------------------------------------------------
-4) Numeric Preference Interpretation
-------------------------------------------------------------
-
-For:
-- food_interest_level
-- shopping_interest_level
-- physical_activity_level
-- photography_importance
-
-Interpret as:
-
-1–3:
-- Include minimally.
-- Do not make central theme.
-
-4–6:
-- Integrate selectively.
-- Secondary but visible.
-
-7–10:
-- Make central to itinerary design.
-- Allocate prime time blocks.
-
-------------------------------------------------------------
-5) Food & Dining Logic
-------------------------------------------------------------
-
-Low food interest:
-- Meals serve logistical function.
-- No long tasting menus.
-
-Moderate:
-- Include 1 notable dining experience.
-
-High:
-- Include destination-appropriate restaurants.
-- Balance cost with budget sensitivity.
-- Avoid unrealistic reservation difficulty unless noted.
-
-------------------------------------------------------------
-6) Accuracy & Realism Requirements
-------------------------------------------------------------
-
-- Only suggest real, publicly accessible locations.
-- Never invent venues.
-- Do not fabricate obscure attractions.
-- Avoid private or restricted-access locations.
-- Avoid over-precise logistics (no fake addresses or times).
-- Avoid assuming impossible ticket availability.
-
-------------------------------------------------------------
-7) Output Structure Rules
-------------------------------------------------------------
-
-- Break each day into:
-  Morning
-  Afternoon
-  Evening
-
-- Keep daily blocks realistic.
-- Do not overfill.
-- Respect start_time_preference and end_time_preference.
-- Respect time constraints first.
-
-Include “Assumptions & conflict resolutions” ONLY if:
-- You adjusted for conflicting constraints.
-- You made conservative assumptions due to missing data.
-
-
-------------------------------------------------------------
-8) Itinerary Quality & Polish Rules
-------------------------------------------------------------
-
-8.1 Structural completeness
-- Every day must include Morning, Afternoon, and Evening.
-- No section may be empty.
-- If returning home mid-day:
-  - Include a meaningful closing experience (e.g., farewell meal, scenic stop, relaxed wind-down).
-- The final day should feel intentional, not truncated.
-
-8.2 Thematic consistency
-- Identify the dominant trip theme based on strongest preferences:
-  - Photography ≥ 7 → scenic framing & golden-hour moments
-  - Food ≥ 7 → curated dining moments
-  - Relaxed schedule → breathing space
-  - Anniversary / romantic purpose → elevated tone
-- Each day must visibly reflect the dominant theme.
-
-8.3 Personalization reinforcement
-- If trip_purpose is specified:
-  - Reinforce it subtly each day.
-- Anniversary:
-  - Include at least one elevated romantic moment.
-- Family:
-  - Include balance and recovery pacing.
-- Solo:
-  - Allow flexibility and exploration.
-
-8.4 Experience progression
-- Days should feel like a narrative arc:
-  - Day 1: Orientation & arrival ease
-  - Middle days: Peak experiences
-  - Final day: Closure & reflection
-- Avoid repetitive daily structure.
-
-8.5 Geographic intelligence
-- Minimize backtracking.
-- Cluster nearby activities.
-- Avoid unrealistic transfer assumptions.
-- Avoid unnecessary long drives for short stops.
-
-8.6 Activity density refinement
-- Do not exceed:
-  - 4 major activities per day (packed)
-  - 3 moderate activities (balanced)
-  - 2 anchor activities (relaxed)
-- Avoid stacking high-energy activities back-to-back.
-
-8.7 Highlighted moments
-- Include at least one “memorable highlight” per 2 days.
-- Highlights may include:
-  - Scenic overlook
-  - Unique dining experience
-  - Cultural immersion
-  - Landmark moment
-
-8.8 Budget realism
-If budget_concern = true:
-- Avoid premium-only venues.
-- Balance one premium activity with lower-cost options.
-- Avoid unrealistic luxury density.
-
-8.9 Time-window enforcement
-- Respect start_time_preference and end_time_preference.
-- Do not schedule evening activity past end_time_preference.
-- Honor strict time constraints explicitly.
-
-8.10 Tone control
-- Avoid generic phrasing.
-- Keep descriptions concise but purposeful.
-- Avoid filler language like “enjoy some time” without context.
-
-------------------------------------------------------------
-9) Elite Refinement & Coherence Layer (Apply Before Output)
-------------------------------------------------------------
-
-9.1 Dominant Theme Reinforcement
-
-Identify the dominant theme based on strongest signals:
-- trip_purpose (e.g., anniversary, family, solo exploration)
-- Highest numeric preference ≥ 8
-- Explicit emotional goals in desired_feelings
-
-Rules:
-- The dominant theme must visibly influence at least one major block per day.
-- Do not let the itinerary feel generic.
-- If anniversary or romantic purpose:
-  - Include at least one elevated or intimate moment.
-  - Include at least one sunset or scenic framing moment.
-  - Include at least one thoughtfully chosen dinner.
-- If photography importance ≥ 8:
-  - Explicitly schedule golden-hour or scenic vantage points.
-- If food interest ≥ 8:
-  - Include at least one curated or destination-defining dining experience.
-
-9.2 Budget Visibility Enforcement
-
-If budget_concern = true:
-- Demonstrate visible cost balancing.
-- At most one premium-style experience every 2 days.
-- Balance higher-cost dinners with casual lunches.
-- Avoid unrealistic luxury density.
-- Do not assume unlimited ticket access or premium tours.
-
+9.2 Budget Sensitivity Enforcement
+If budget_concern is True:
 The itinerary must subtly reflect cost awareness.
 
 9.3 Travel vs Depth Enforcement
@@ -639,7 +360,7 @@ Afternoon:
 Evening:
 """.strip()
 
-# ---------- Endpoint ----------
+# ---------- Endpoints ----------
 
 @app.post("/generate-itinerary", response_model=TripResponse)
 def generate_itinerary(ctx: TripContext):
@@ -653,7 +374,8 @@ def generate_itinerary(ctx: TripContext):
     # =====================================================
     # 2) Shared required fields (both modes)
     # =====================================================
-    if ctx.people is None:
+    people_value = ctx.people if ctx.trip_mode == "discover" else ctx.people_b
+    if people_value is None:
         raise HTTPException(400, "people is required")
 
     if ctx.has_time_constraints and not ctx.time_constraints_detail:
@@ -682,15 +404,17 @@ def generate_itinerary(ctx: TripContext):
         if not ctx.destination:
             raise HTTPException(400, "destination is required for trip_mode='known'")
 
-        if ctx.days is None:
-            raise HTTPException(400, "days is required for trip_mode='known'")
+        if ctx.knows_trip_length_b and ctx.days_b is None:
+            raise HTTPException(
+                400,
+                "days_b is required when knows_trip_length_b is true"
+            )
 
     # =====================================================
     # 4) Option A: destination discovery
     # =====================================================
     if ctx.trip_mode == "discover":
 
-        # Required discovery logic
         if ctx.has_discovery_intent and not ctx.discovery_intent:
             raise HTTPException(
                 400,
@@ -706,14 +430,7 @@ def generate_itinerary(ctx: TripContext):
                     400,
                     "days is required when knows_trip_length is true"
                 )
-        else:
-            if not (ctx.has_dates and ctx.date_range):
-                raise HTTPException(
-                    400,
-                    "Either days or a valid date_range must be provided"
-                )
 
-        # International vs domestic logic
         if ctx.international_travel is None:
             raise HTTPException(400, "international_travel is required")
 
@@ -782,6 +499,7 @@ def generate_itinerary(ctx: TripContext):
             )
 
     validate_range(ctx.days, 1, 30, "days")
+    validate_range(ctx.days_b, 1, 30, "days_b")
     validate_range(ctx.food_interest_level, 1, 10, "food_interest_level")
     validate_range(ctx.shopping_interest_level, 1, 10, "shopping_interest_level")
     validate_range(ctx.physical_activity_level, 1, 10, "physical_activity_level")
@@ -813,11 +531,31 @@ def generate_itinerary(ctx: TripContext):
     os.makedirs("generated_pdfs", exist_ok=True)
 
     timestamp = datetime.now().strftime("%m_%d_%Y_%H%M%S")
-    pdf_path = f"generated_pdfs/itinerary_{timestamp}.pdf"
+    pdf_filename = f"itinerary_{timestamp}.pdf"
+    pdf_path = f"generated_pdfs/{pdf_filename}"
 
     generate_itinerary_pdf(
         validated_itinerary,
         pdf_path
     )
 
-    return TripResponse(itinerary=validated_itinerary)
+    return TripResponse(itinerary=validated_itinerary, pdf_path=pdf_filename)
+
+
+@app.get("/download-itinerary/{filename}")
+def download_itinerary(filename: str):
+    """Download a previously generated itinerary PDF by filename."""
+    # Sanitize: reject any path traversal attempts
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Invalid filename")
+
+    pdf_path = f"generated_pdfs/{filename}"
+
+    if not os.path.exists(pdf_path):
+        raise HTTPException(404, "PDF not found")
+
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename="itinerary.pdf",
+    )
